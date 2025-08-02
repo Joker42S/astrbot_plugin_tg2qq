@@ -1,0 +1,41 @@
+{
+  "debug_mode": {
+    "description": "调试模式",
+    "type": "bool",
+    "hint": "调试模式",
+    "default": false
+  },
+  "source_tg": {
+      "description": "Telegram ID",
+      "type": "string",
+      "hint": "Telegram ID",
+      "default": "",
+      "required": true
+  },
+  "target_qq": {
+    "description": "目标 QQ 群号",
+    "type": "string",
+    "hint": "目标 QQ 群号",
+    "default": "",
+    "required": true
+  },
+    "debug_source_tg": {
+      "description": "调试用 Telegram ID",
+      "type": "string",
+      "hint": "调试用 Telegram ID",
+      "default": ""
+  },
+  "debug_target_qq": {
+    "description": "调试用 QQ 群号",
+    "type": "string",
+    "hint": "调试用 QQ 群号",
+    "default": ""
+  },
+  "tg_proxy": {
+    "description": "代理服务器",
+    "type": "string",
+    "hint": "代理服务器，格式：http://xxxx",
+    "default": "",
+    "is_sensitive": true
+  }
+}
