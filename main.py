@@ -71,47 +71,42 @@ class TG2QQPlugin(Star):
             # 构建转发消息
             forward_message = MessageChain()
             tg_msg = event.get_messages()
-            forward_message.chain = tg_msg
             if self.debug_mode:
+                logger.info(f"TG message: {tg_msg}")
                 for component in tg_msg:
+                    logger.info(f"Debug TG MSG: Component type: {type(component)}, component: {component}")
+            for component in tg_msg:
+                if isinstance(component, Image) or isinstance(component, File):
+                    url = ""
                     if isinstance(component, Image):
                         logger.info(f"Image info, file:{component.file}, url:{component.url}")
-                    elif isinstance(component, File):
+                        url = component.url
+                    else:
                         logger.info(f"File info, path:{component.file_}, url:{component.url}")
-            #TODO: 下载后混淆hash并缓存再发送
-            #TODO: 根据url建立本地数据库
-            # try:
-            #     # 下载图片
-            #     # Get proxy settings from config
-            #     proxy = self.config.get("proxy", None)
-                
-            #     # Create client session with proxy if configured
-            #     async with aiohttp.ClientSession() as session:
-            #         # Prepare request kwargs with proxy
-            #         kwargs = {}
-            #         if proxy:
-            #             kwargs["proxy"] = proxy
-                        
-            #         async with session.get(component.url, **kwargs) as resp:
-            #             if resp.status == 200:
-            #                 img_data = await resp.read()
-                            
-            #                 # 破坏图片哈希
-            #                 obfuscated_data = await _image_obfus(img_data)
-                            
-            #                 # 保存到临时文件
-            #                 temp_filename = f"{uuid.uuid4()}.png"
-            #                 temp_path = self.temp_dir / temp_filename
-                            
-            #                 async with aiofiles.open(temp_path, 'wb') as f:
-            #                     await f.write(obfuscated_data)
-                            
-            #                 # 添加图片组件
-            #                 forward_message.append(Image(file=str(temp_path)))
-                            
-            # except Exception as e:
-            #     pass
-            
+                        url = component.file_
+                    # Extract file extension from URL
+                    url_extension = url.split('.')[-1] if '.' in url else 'png'
+                    if not url_extension in ('jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tif'):
+                        continue
+                    file_name = str(uuid.uuid5(uuid.NAMESPACE_URL, url)) + '.' + url_extension
+                    file_path = self.temp_dir / file_name
+                    logger.info(f'本地图片路径：{file_path}')
+                    if not file_path.exists():
+                        logger.info(f'下载图片：{url}')
+                        image = Image.fromURL(url)
+                        temp_file_path = await image.convert_to_file_path()
+                        async with aiofiles.open(temp_file_path, 'rb') as f:
+                            img_data = await f.read()
+                        processed_data = await _image_obfus(img_data)
+                        async with aiofiles.open(file_path, 'wb') as f:
+                            await f.write(processed_data)
+                    forward_message.file_image(str(file_path))
+                elif isinstance(component, Plain):
+                    forward_message.chain.append(component)
+                else:
+                    logger.info(f"Unkown component type: {type(component)}, component: {component}")
+                    if self.debug_mode:
+                        forward_message.message(component.toString)
             # 发送转发消息到目标QQ群
             await self.context.send_message(f"aiocqhttp:GroupMessage:{self.target_qq}",forward_message)
             logger.info(f"成功转发消息从TG频道 {self.source_tg} 到QQ群 {self.target_qq}")
@@ -120,11 +115,21 @@ class TG2QQPlugin(Star):
             logger.error(f"TG2QQ消息转发失败: {e}")
         finally:
             event.stop_event()
-        
-    async def terminate(self):
-        """插件销毁方法"""
-        await self._cleanup_temp_files()
-        logger.info("TG2QQ插件已销毁")
+
+    @filter.command("tg_reload")
+    async def reload_config(self, event: AstrMessageEvent):
+        """重载tg适配器"""
+        try:
+            platform = self.context.get_platform('telegram')
+            if platform == None:
+                logger.error("未找到启用状态的TG适配器")
+                return
+            logger.info("尝试重载TG适配器")
+            await platform.terminate()
+            await platform.run()
+            logger.info("TG适配器已重载")
+        except Exception as e:
+            logger.error(f"重载TG适配器失败: {e}")
 
 async def _image_obfus(img_data):
     """破坏图片哈希"""

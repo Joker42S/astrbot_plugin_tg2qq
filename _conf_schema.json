@@ -30,12 +30,5 @@
     "type": "string",
     "hint": "调试用 QQ 群号",
     "default": ""
-  },
-  "tg_proxy": {
-    "description": "代理服务器",
-    "type": "string",
-    "hint": "代理服务器，格式：http://xxxx",
-    "default": "",
-    "is_sensitive": true
   }
 }
