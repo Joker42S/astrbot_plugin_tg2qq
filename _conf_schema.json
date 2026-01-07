@@ -18,8 +18,14 @@
     "hint": "目标 QQ 群号",
     "default": "",
     "required": true
+  },  
+  "resend_threshold": {
+    "description": "图片重发阈值",
+    "type": "int",
+    "hint": "当图片发送失败数累计超过该值时，会合并为pdf重新发送，设置为0时禁用该功能",
+    "default": 0
   },
-    "debug_source_tg": {
+  "debug_source_tg": {
       "description": "调试用 Telegram ID",
       "type": "string",
       "hint": "调试用 Telegram ID",

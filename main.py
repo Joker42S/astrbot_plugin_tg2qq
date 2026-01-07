@@ -1,11 +1,12 @@
+from datetime import date
 from typing import final
 from astrbot.api.event import filter, AstrMessageEvent, MessageChain
 from astrbot.api.star import Context, Star, register, StarTools
 from astrbot.api import logger
 from astrbot.api.message_components import *
-import aiohttp
 import aiofiles
 import uuid
+import img2pdf
 
 @register("TG2QQ", "Joker42S", "转发TG消息到QQ", "1.0.0")
 class TG2QQPlugin(Star):
@@ -15,32 +16,30 @@ class TG2QQPlugin(Star):
 
     async def initialize(self):
         """插件初始化方法"""
-        try:
-            self.plugin_name = "TG2QQ"
-            
-            self.base_dir = StarTools.get_data_dir(self.plugin_name)
-            # 创建临时目录用于存储下载的图片
-            self.temp_dir = self.base_dir / "temp"
-            if not self.temp_dir.exists():
-                self.temp_dir.mkdir(parents=True, exist_ok=True)
-            # 创建持久化目录
-            self.persistent_dir = self.base_dir / "persistent"
-            if not self.persistent_dir.exists():
-                self.persistent_dir.mkdir(parents=True, exist_ok=True)
-            self.debug_mode = self.config.get("debug_mode")
-            if self.debug_mode:
-                self.source_tg = self.config.get("debug_source_tg")
-                self.target_qq = self.config.get("debug_target_qq")
-                logger.info('调试模式开启，将使用调试配置')
-            else:
-                self.source_tg = self.config.get("source_tg")
-                self.target_qq = self.config.get("target_qq")
+        self.plugin_name = "TG2QQ"
+        self.sent_failed_imgs = []
+        self.base_dir = StarTools.get_data_dir(self.plugin_name)
+        # 创建临时目录用于存储下载的图片
+        self.temp_dir = self.base_dir / "temp"
+        if not self.temp_dir.exists():
+            self.temp_dir.mkdir(parents=True, exist_ok=True)
+        # 创建持久化目录
+        self.persistent_dir = self.base_dir / "persistent"
+        if not self.persistent_dir.exists():
+            self.persistent_dir.mkdir(parents=True, exist_ok=True)
+        self.debug_mode = self.config.get("debug_mode")
+        if self.debug_mode:
+            self.source_tg = self.config.get("debug_source_tg")
+            self.target_qq = self.config.get("debug_target_qq")
+            logger.info('调试模式开启，将使用调试配置')
+        else:
+            self.source_tg = self.config.get("source_tg")
+            self.target_qq = self.config.get("target_qq")
             
             # 检查配置是否完整
             if not self.source_tg or not self.target_qq:
                 logger.warning("TG2QQ插件配置不完整，请检查source_tg和target_qq配置")
-        except Exception as e:
-            logger.error(f"TG2QQ插件初始化失败: {e}")
+        self.resend_threshold = self.config.get("resend_threshold", 0)
 
     async def _cleanup_temp_files(self):
         """清理临时文件"""
@@ -113,6 +112,17 @@ class TG2QQPlugin(Star):
             
         except Exception as e:
             logger.error(f"TG2QQ消息转发失败: {e}")
+            if forward_message:
+                self.sent_failed_imgs.extend(
+                    comp.path for comp in forward_message.chain
+                    if isinstance(comp, Image)
+                )
+            if self.resend_threshold == 0 or len(self.sent_failed_imgs) < self.resend_threshold:
+                return
+            logger.info(f"发送失败图片累计{len(self.sent_failed_imgs)}张，达到重发阈值，开始合并为pdf重发")
+            img_paths = self.sent_failed_imgs.copy()
+            self.sent_failed_imgs.clear()
+            await self._send_pdf(img_paths)
         finally:
             event.stop_event()
 
@@ -130,6 +140,14 @@ class TG2QQPlugin(Star):
             logger.info("TG适配器已重载")
         except Exception as e:
             logger.error(f"重载TG适配器失败: {e}")
+
+    async def _send_pdf(self, img_paths):
+        pdf_path = self.temp_dir / f"{uuid.uuid4()}.pdf"
+        with open(pdf_path, "wb") as f:
+            f.write(img2pdf.convert(img_paths))
+        msg = MessageChain()
+        msg.chain = [File(file=str(pdf_path), name=f"TG转发失败图片合集-{date.today().isoformat()}")]
+        await self.context.send_message(f"aiocqhttp:GroupMessage:{self.target_qq}",msg)
 
 async def _image_obfus(img_data):
     """破坏图片哈希"""
@@ -169,7 +187,7 @@ async def _image_obfus(img_data):
                     pixels[x, y] = (new_r, new_g, new_b)
 
                 with BytesIO() as output:
-                    img.save(output, format="PNG")
+                    img.save(output, format="JPEG", quality=95, subsampling=0)
                     return output.getvalue()
 
     except Exception as e:
