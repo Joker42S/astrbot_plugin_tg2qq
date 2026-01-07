@@ -1,5 +1,7 @@
 from datetime import date
 from typing import final
+
+import aiohttp
 from astrbot.api.event import filter, AstrMessageEvent, MessageChain
 from astrbot.api.star import Context, Star, register, StarTools
 from astrbot.api import logger
@@ -87,18 +89,11 @@ class TG2QQPlugin(Star):
                     url_extension = url.split('.')[-1] if '.' in url else 'png'
                     if not url_extension in ('jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tif'):
                         continue
-                    file_name = str(uuid.uuid5(uuid.NAMESPACE_URL, url)) + '.' + url_extension
+                    file_name = str(uuid.uuid5(uuid.NAMESPACE_URL, url)) + '.' + 'jpg'
                     file_path = self.temp_dir / file_name
-                    logger.info(f'本地图片路径：{file_path}')
+                    # logger.info(f'本地图片路径：{file_path}')
                     if not file_path.exists():
-                        logger.info(f'下载图片：{url}')
-                        image = Image.fromURL(url)
-                        temp_file_path = await image.convert_to_file_path()
-                        async with aiofiles.open(temp_file_path, 'rb') as f:
-                            img_data = await f.read()
-                        processed_data = await _image_obfus(img_data)
-                        async with aiofiles.open(file_path, 'wb') as f:
-                            await f.write(processed_data)
+                        await self._download_image(url, str(file_path))
                     forward_message.file_image(str(file_path))
                 elif isinstance(component, Plain):
                     forward_message.chain.append(component)
@@ -148,6 +143,38 @@ class TG2QQPlugin(Star):
         msg = MessageChain()
         msg.chain = [File(file=str(pdf_path), name=f"TG转发失败图片合集-{date.today().isoformat()}")]
         await self.context.send_message(f"aiocqhttp:GroupMessage:{self.target_qq}",msg)
+
+    async def _download_image(self, url: str, file_path: str, modify_hash = True) -> Path:
+        """下载单张图片"""
+        try:
+            # 设置请求头
+            headers = {            
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0 Safari/537.36"
+                )
+            }
+            
+            # 下载图片
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers, timeout=30, proxy=self.proxy) as response:
+                    if response.status == 200:
+                        img_data = await response.read()
+                        if modify_hash:
+                            img_data = await _image_obfus(img_data)
+                        async with aiofiles.open(file_path, 'wb') as f:
+                            await f.write(img_data)
+                        
+                        logger.info(f"下载图片 {id}: {file_path}")
+                        return file_path
+                    else:
+                        logger.error(f"下载图片失败，状态码: {response.status}")
+                        return None
+            
+        except Exception as e:
+            logger.error(f"下载封面图片失败: {e}")
+            return None
 
 async def _image_obfus(img_data):
     """破坏图片哈希"""
