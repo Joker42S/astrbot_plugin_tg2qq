@@ -144,7 +144,7 @@ class TG2QQPlugin(Star):
         msg.chain = [File(file=str(pdf_path), name=f"TG转发失败图片合集-{date.today().isoformat()}")]
         await self.context.send_message(f"aiocqhttp:GroupMessage:{self.target_qq}",msg)
 
-    async def _download_image(self, url: str, file_path: str, modify_hash = True) -> Path:
+    async def _download_image(self, url: str, file_path: str, modify_hash = True):
         """下载单张图片"""
         try:
             # 设置请求头
