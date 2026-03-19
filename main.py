@@ -37,10 +37,10 @@ class TG2QQPlugin(Star):
         else:
             self.source_tg = self.config.get("source_tg")
             self.target_qq = self.config.get("target_qq")
-            
-            # 检查配置是否完整
-            if not self.source_tg or not self.target_qq:
-                logger.warning("TG2QQ插件配置不完整，请检查source_tg和target_qq配置")
+        # 检查配置是否完整
+        if not self.source_tg or not self.target_qq:
+            logger.warning("TG2QQ插件配置不完整，请检查source_tg和target_qq配置")
+        self.proxy = self.config.get("proxy")
         self.resend_threshold = self.config.get("resend_threshold", 0)
 
     async def _cleanup_temp_files(self):

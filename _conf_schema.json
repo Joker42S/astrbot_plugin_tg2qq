@@ -35,6 +35,12 @@
     "description": "调试用 QQ 群号",
     "type": "string",
     "hint": "调试用 QQ 群号",
+    "default": ""  
+  },
+  "proxy": {
+    "description": "代理服务器",
+    "type": "string",
+    "hint": "代理服务器，格式：http://xxxx",
     "default": ""
   }
 }
